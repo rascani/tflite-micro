@@ -39,8 +39,8 @@ cc_library(
     deps = [
         ":memory_helpers",
         ":micro_allocator",
-        ":micro_context",
         ":micro_graph",
+        ":micro_interpreter_context",
         ":micro_profiler_interface",
         ":op_resolvers",
         "//tensorflow/lite:type_to_tflitetype",
@@ -63,8 +63,26 @@ cc_library(
     ],
     copts = micro_copts(),
     deps = [
+        ":micro_common",
+        ":micro_graph_info",
+        ":micro_log",
+        "//tensorflow/lite/c:common",
+    ],
+)
+
+cc_library(
+    name = "micro_interpreter_context",
+    srcs = [
+        "micro_interpreter_context.cc",
+    ],
+    hdrs = [
+        "micro_interpreter_context.h",
+    ],
+    copts = micro_copts(),
+    deps = [
         ":memory_helpers",
         ":micro_allocator",
+        ":micro_context",
         ":micro_graph",
         ":micro_graph_info",
         ":micro_log",
@@ -412,13 +430,13 @@ cc_test(
 )
 
 cc_test(
-    name = "micro_context_test",
+    name = "micro_interpreter_context_test",
     srcs = [
-        "micro_context_test.cc",
+        "micro_interpreter_context_test.cc",
     ],
     deps = [
         ":micro_allocator",
-        ":micro_context",
+        ":micro_interpreter_context",
         ":test_helpers",
         "//tensorflow/lite/micro/testing:micro_test",
     ],
