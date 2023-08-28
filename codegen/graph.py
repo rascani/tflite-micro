@@ -74,6 +74,14 @@ class Subgraph(object):
     return self._subgraph_idx
 
   @property
+  def inputs(self) -> Sequence[int]:
+    return self._subgraph.inputs
+
+  @property
+  def outputs(self) -> Sequence[int]:
+    return self._subgraph.outputs
+
+  @property
   def operators(self) -> Sequence[operator.Operator]:
     return self._operators
 

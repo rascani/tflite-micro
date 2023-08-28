@@ -19,21 +19,80 @@ limitations under the License.
 
 #include "tensorflow/lite/c/c_api_types.h"
 #include "tensorflow/lite/c/common.h"
+#include "tensorflow/lite/micro/micro_context.h"
+#include "tensorflow/lite/micro/micro_graph_info.h"
 
 namespace hello_world_model {
 
 class Model {
  public:
-  Model();
+  Model() = default;
 
   TfLiteStatus Invoke();
 
  private:
-  TfLiteStatus InvokeSubgraph0();
+  class Graph : public tflite::MicroContext, public tflite::MicroGraphInfo {
+   public:
+    Graph();
 
-  TfLiteContext context_ = {};
-  TfLiteNode subgraph0_nodes_[3] = {};
-  TfLiteEvalTensor subgraph0_tensors_[10] = {};
+    // MicroContext API
+    void* GetScratchBuffer(int buffer_idx) override;
+
+    TfLiteEvalTensor* GetEvalTensor(int tensor_idx) override;
+
+    TfLiteStatus set_external_context(void* external_context_payload) override;
+
+    void* external_context() override;
+
+    tflite::MicroGraphInfo& graph_info() override;
+
+    void* AllocatePersistentBuffer(size_t) override { return nullptr; }
+
+    TfLiteStatus RequestScratchBufferInArena(size_t, int*) override {
+      return kTfLiteError;
+    }
+
+    TfLiteTensor* AllocateTempTfLiteTensor(int) override { return nullptr; }
+
+    void DeallocateTempTfLiteTensor(TfLiteTensor*) override {}
+
+    uint8_t* AllocateTempBuffer(size_t, size_t) override { return nullptr; }
+
+    void DeallocateTempBuffer(uint8_t*) override {}
+
+    // MicroGraphInfo API
+    TfLiteStatus InvokeSubgraph(int subgraph_idx) override;
+
+    size_t NumSubgraphInputs(int subgraph_idx) override;
+
+    TfLiteEvalTensor* GetSubgraphInput(int subgraph_idx,
+                                       int input_idx) override;
+
+    size_t NumSubgraphOutputs(int subgraph_idx) override;
+
+    TfLiteEvalTensor* GetSubgraphOutput(int subgraph_idx,
+                                        int output_idx) override;
+
+    int NumSubgraphs() override { return 1; }
+
+    tflite::MicroResourceVariables* GetResourceVariables() override;
+
+   private:
+    TfLiteEvalTensor* GetSubgraphTensors(int subgraph_idx);
+    int GetTensorInputIndex(int subgraph_idx, int input_idx);
+    int GetTensorOutputIndex(int subgraph_idx, int output_idx);
+
+    TfLiteStatus InvokeSubgraph0();
+
+    TfLiteContext context_ = {};
+    int current_subgraph_idx_ = 0;
+    void* external_context_payload_;
+    TfLiteNode subgraph0_nodes_[3] = {};
+    TfLiteEvalTensor subgraph0_tensors_[10] = {};
+    TF_LITE_REMOVE_VIRTUAL_DELETE
+  };
+
+  Graph graph_ = {};
 };
 
 }  // namespace hello_world_model

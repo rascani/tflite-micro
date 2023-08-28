@@ -22,6 +22,8 @@ limitations under the License.
 #include "tensorflow/lite/c/common.h"
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/micro_common.h"
+#include "tensorflow/lite/micro/micro_graph_info.h"
+#include "tensorflow/lite/micro/micro_log.h"
 
 namespace hello_world_model {
 namespace {
@@ -204,11 +206,11 @@ struct Tensor0_9Dims {
 
 }  // namespace
 
-Model::Model() {
-  context_.impl_ = nullptr;
+Model::Graph::Graph() {
+  context_.impl_ = static_cast<void*>(this);
   context_.ReportError = nullptr;
   context_.GetTensor = nullptr;
-  context_.GetEvalTensor = nullptr;
+  context_.GetEvalTensor = tflite::MicroContextGetEvalTensor;
   context_.profiler = nullptr;
   context_.GetExternalContext = nullptr;
   context_.GetScratchBuffer = nullptr;
@@ -280,9 +282,107 @@ Model::Model() {
       .type = kTfLiteInt8};
 }
 
-TfLiteStatus Model::Invoke() { return InvokeSubgraph0(); }
+void* Model::Graph::GetScratchBuffer(int buffer_idx) { return nullptr; }
 
-TfLiteStatus Model::InvokeSubgraph0() {
+TfLiteEvalTensor* Model::Graph::GetEvalTensor(int tensor_idx) {
+  TfLiteEvalTensor* tensor_array = GetSubgraphTensors(current_subgraph_idx_);
+  return &tensor_array[tensor_idx];
+}
+
+TfLiteStatus Model::Graph::set_external_context(
+    void* external_context_payload) {
+  if (external_context_payload == nullptr ||
+      external_context_payload_ != nullptr) {
+    MicroPrintf(
+        "Attempting to set external context to %x but it was %x already",
+        external_context_payload, external_context_payload_);
+    return kTfLiteError;
+  }
+
+  external_context_payload_ = external_context_payload;
+  return kTfLiteOk;
+}
+
+void* Model::Graph::external_context() { return external_context_payload_; }
+
+tflite::MicroGraphInfo& Model::Graph::graph_info() { return *this; }
+
+TfLiteStatus Model::Graph::InvokeSubgraph(int subgraph_idx) {
+  int previous_subgraph_idx = current_subgraph_idx_;
+  TfLiteStatus status = kTfLiteError;
+  switch (subgraph_idx) {
+    case 0:
+      status = InvokeSubgraph0();
+      break;
+    default:
+      break;
+  }
+  current_subgraph_idx_ = previous_subgraph_idx;
+  return status;
+}
+
+size_t Model::Graph::NumSubgraphInputs(int subgraph_idx) {
+  switch (subgraph_idx) {
+    case 0:
+      return 1;
+  }
+  return 0;
+}
+
+TfLiteEvalTensor* Model::Graph::GetSubgraphInput(int subgraph_idx,
+                                                 int input_idx) {
+  int tensor_idx = GetTensorInputIndex(subgraph_idx, input_idx);
+  return &GetSubgraphTensors(subgraph_idx)[tensor_idx];
+}
+
+size_t Model::Graph::NumSubgraphOutputs(int subgraph_idx) {
+  switch (subgraph_idx) {
+    case 0:
+      return 1;
+  }
+  return 0;
+}
+
+TfLiteEvalTensor* Model::Graph::GetSubgraphOutput(int subgraph_idx,
+                                                  int output_idx) {
+  int tensor_idx = GetTensorOutputIndex(subgraph_idx, output_idx);
+  return &GetSubgraphTensors(subgraph_idx)[tensor_idx];
+}
+
+tflite::MicroResourceVariables* Model::Graph::GetResourceVariables() {
+  // TODO(rjascani): Handle MicroResourceVariables
+  return nullptr;
+}
+
+TfLiteEvalTensor* Model::Graph::GetSubgraphTensors(int subgraph_idx) {
+  switch (subgraph_idx) {
+    case 0:
+      return subgraph0_tensors_;
+  }
+  return nullptr;
+}
+
+int Model::Graph::GetTensorInputIndex(int subgraph_idx, int input_idx) {
+  switch (subgraph_idx) {
+    case 0: {
+      constexpr int kInputs[1] = {0};
+      return kInputs[input_idx];
+    }
+  }
+  return 0;
+}
+
+int Model::Graph::GetTensorOutputIndex(int subgraph_idx, int output_idx) {
+  switch (subgraph_idx) {
+    case 0: {
+      constexpr int kOutputs[1] = {9};
+      return kOutputs[output_idx];
+    }
+  }
+  return 0;
+}
+
+TfLiteStatus Model::Graph::InvokeSubgraph0() {
   TF_LITE_ENSURE_OK(context_, op_table[OpCode::kFullyConnected].invoke(
                                   &context_, &subgraph0_nodes_[0]));
   TF_LITE_ENSURE_OK(context_, op_table[OpCode::kFullyConnected].invoke(
@@ -292,5 +392,7 @@ TfLiteStatus Model::InvokeSubgraph0() {
 
   return kTfLiteOk;
 }
+
+TfLiteStatus Model::Invoke() { return graph_.InvokeSubgraph(0); }
 
 }  // namespace hello_world_model

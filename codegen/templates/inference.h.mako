@@ -19,27 +19,86 @@ limitations under the License.
 
 #include "tensorflow/lite/c/c_api_types.h"
 #include "tensorflow/lite/c/common.h"
+#include "tensorflow/lite/micro/micro_context.h"
+#include "tensorflow/lite/micro/micro_graph_info.h"
 
 namespace ${model_name} {
 
 class Model {
  public:
-  Model();
+  Model() = default;
 
   TfLiteStatus Invoke();
 
  private:
+  class Graph : public tflite::MicroContext, public tflite::MicroGraphInfo {
+   public:
+    Graph();
+
+    // MicroContext API
+    void* GetScratchBuffer(int buffer_idx) override;
+
+    TfLiteEvalTensor* GetEvalTensor(int tensor_idx) override;
+
+    TfLiteStatus set_external_context(void* external_context_payload) override;
+
+    void* external_context() override;
+
+    tflite::MicroGraphInfo& graph_info() override;
+
+    void* AllocatePersistentBuffer(size_t) override { return nullptr; }
+
+    TfLiteStatus RequestScratchBufferInArena(size_t, int*) override {
+      return kTfLiteError;
+    }
+
+    TfLiteTensor* AllocateTempTfLiteTensor(int) override { return nullptr; }
+
+    void DeallocateTempTfLiteTensor(TfLiteTensor*) override {}
+
+    uint8_t* AllocateTempBuffer(size_t, size_t) override { return nullptr; }
+
+    void DeallocateTempBuffer(uint8_t*) override {}
+
+    // MicroGraphInfo API
+    TfLiteStatus InvokeSubgraph(int subgraph_idx) override;
+
+    size_t NumSubgraphInputs(int subgraph_idx) override;
+
+    TfLiteEvalTensor* GetSubgraphInput(int subgraph_idx,
+                                       int input_idx) override;
+
+    size_t NumSubgraphOutputs(int subgraph_idx) override;
+
+    TfLiteEvalTensor* GetSubgraphOutput(int subgraph_idx,
+                                        int output_idx) override;
+
+    int NumSubgraphs() override { return ${len(graph.subgraphs)}; }
+
+    tflite::MicroResourceVariables* GetResourceVariables() override;
+
+   private:
+    TfLiteEvalTensor* GetSubgraphTensors(int subgraph_idx);
+    int GetTensorInputIndex(int subgraph_idx, int input_idx);
+    int GetTensorOutputIndex(int subgraph_idx, int output_idx);
+
 % for subgraph_idx in range(len(graph.subgraphs)):
-  TfLiteStatus InvokeSubgraph${subgraph_idx}();
+    TfLiteStatus InvokeSubgraph${subgraph_idx}();
 % endfor
 
-  TfLiteContext context_ = {};
+    TfLiteContext context_ = {};
+    int current_subgraph_idx_ = 0;
+    void* external_context_payload_;
 % for subgraph in graph.subgraphs:
-  TfLiteNode ${subgraph.nodes_array}[${len(subgraph.operators)}] = {};
+    TfLiteNode ${subgraph.nodes_array}[${len(subgraph.operators)}] = {};
 % endfor
 % for subgraph in graph.subgraphs:
-  TfLiteEvalTensor ${subgraph.tensors_array}[${len(subgraph.tensors)}] = {};
+    TfLiteEvalTensor ${subgraph.tensors_array}[${len(subgraph.tensors)}] = {};
 % endfor
+    TF_LITE_REMOVE_VIRTUAL_DELETE
+  };
+
+  Graph graph_ = {};
 };
 
 }  // namespace ${model_name}
