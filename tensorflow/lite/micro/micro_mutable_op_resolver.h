@@ -620,7 +620,7 @@ class MicroMutableOpResolver : public MicroOpResolver {
   }
 
   TfLiteStatus AddStreamingConv2D(
-      const TFLMRegistration& registration = Register_CONV_2D()) {
+      const TFLMRegistration& registration = Register_STREAMING_CONV_2D()) {
     return AddBuiltin(BuiltinOperator_TEMP_STREAMING_CONV_2D, registration,
                       ParseConv2D);
   }
